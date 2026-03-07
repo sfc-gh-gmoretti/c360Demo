@@ -1,0 +1,24 @@
+spec:
+  containers:
+    - name: aviva-customer360
+      image: <REPO_URL>/aviva-customer360:latest
+      env:
+        SNOWFLAKE_ACCOUNT: "{{ snowflake.account }}"
+        SNOWFLAKE_HOST: "{{ snowflake.host }}"
+        SNOWFLAKE_DATABASE: CUSTOMER_DEMO
+        SNOWFLAKE_SCHEMA: PUBLIC
+        SNOWFLAKE_WAREHOUSE: DEMO_WH
+        CORTEX_AGENT_NAME: CUSTOMER_DEMO.PUBLIC.CUSTOMER_360
+      resources:
+        requests:
+          cpu: 0.5
+          memory: 1Gi
+        limits:
+          cpu: 2
+          memory: 4Gi
+  endpoints:
+    - name: app
+      port: 8000
+      public: true
+  networkPolicyConfig:
+    allowInternetEgress: true
