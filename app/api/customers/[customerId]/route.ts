@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import fs from "fs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -33,7 +34,8 @@ function generateJwtToken(): string {
 
   const user = (process.env.SNOWFLAKE_USER || "admin").toUpperCase();
   const privateKey = getPrivateKey();
-  const qualifiedAccountName = "SFSEEUROPE-EU_DEMO86";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
+  const qualifiedAccountName = account.replace(/-/g, "_").replace(/\./g, "_").toUpperCase();
 
   const privateKeyObj = crypto.createPrivateKey(privateKey);
   const publicKeyDer = crypto.createPublicKey(privateKeyObj).export({ type: "spki", format: "der" });
@@ -55,10 +57,12 @@ function generateJwtToken(): string {
 
 function getAccountBaseUrl(): string {
   const token = getOAuthToken();
-  if (token && process.env.SNOWFLAKE_HOST) {
-    return `https://${process.env.SNOWFLAKE_HOST}`;
+  if (token) {
+    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
+    return `https://${host}`;
   }
-  return "https://SFSEEUROPE-EU_DEMO86.snowflakecomputing.com";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
+  return `https://${account}.snowflakecomputing.com`;
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -67,9 +71,9 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   if (oauthToken) {
     return {
       "Authorization": `Bearer ${oauthToken}`,
+      "X-Snowflake-Authorization-Token-Type": "OAUTH",
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "X-Snowflake-Authorization-Token-Type": "OAUTH",
     };
   }
   

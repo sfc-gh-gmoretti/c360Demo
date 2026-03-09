@@ -32,7 +32,8 @@ function generateJwtToken(): string {
 
   const user = (process.env.SNOWFLAKE_USER || "admin").toUpperCase();
   const privateKey = getPrivateKey();
-  const qualifiedAccountName = "SFSEEUROPE-EU_DEMO86";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
+  const qualifiedAccountName = account.replace(/-/g, "_").replace(/\./g, "_").toUpperCase();
 
   const privateKeyObj = crypto.createPrivateKey(privateKey);
   const publicKeyDer = crypto.createPublicKey(privateKeyObj).export({ type: "spki", format: "der" });
@@ -53,7 +54,8 @@ function generateJwtToken(): string {
 }
 
 export function getAccountBaseUrl(): string {
-  return "https://SFSEEUROPE-EU_DEMO86.snowflakecomputing.com";
+  const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
+  return `https://${host}`;
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -63,7 +65,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
     "Content-Type": "application/json",
     "Accept": "application/json",
-    "User-Agent": "AvivaCustomer360/1.0",
+    "User-Agent": "Customer360Intelligence/1.0",
   };
 }
 

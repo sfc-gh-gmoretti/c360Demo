@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  config-app:
+    build:
+      context: ./config-app
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app/customer-360
+      - ./config-app:/app
+      - /app/node_modules
+    environment:
+      - CONFIG_PATH=/app/config/settings.json
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    networks:
+      - customer360
+
+  customer-360-preview:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config:/app/config:ro
+    env_file:
+      - ./config/.env
+    depends_on:
+      - config-app
+    networks:
+      - customer360
+    profiles:
+      - preview
+
+networks:
+  customer360:
+    driver: bridge

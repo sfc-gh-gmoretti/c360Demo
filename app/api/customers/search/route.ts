@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import fs from "fs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -33,7 +34,8 @@ function generateJwtToken(): string {
 
   const user = (process.env.SNOWFLAKE_USER || "admin").toUpperCase();
   const privateKey = getPrivateKey();
-  const qualifiedAccountName = "SFSEEUROPE-EU_DEMO86";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
+  const qualifiedAccountName = account.replace(/-/g, "_").replace(/\./g, "_").toUpperCase();
 
   const privateKeyObj = crypto.createPrivateKey(privateKey);
   const publicKeyDer = crypto.createPublicKey(privateKeyObj).export({ type: "spki", format: "der" });
@@ -55,10 +57,12 @@ function generateJwtToken(): string {
 
 function getAccountBaseUrl(): string {
   const token = getOAuthToken();
-  if (token && process.env.SNOWFLAKE_HOST) {
-    return `https://${process.env.SNOWFLAKE_HOST}`;
+  if (token) {
+    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
+    return `https://${host}`;
   }
-  return "https://SFSEEUROPE-EU_DEMO86.snowflakecomputing.com";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
+  return `https://${account}.snowflakecomputing.com`;
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -67,9 +71,9 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   if (oauthToken) {
     return {
       "Authorization": `Bearer ${oauthToken}`,
+      "X-Snowflake-Authorization-Token-Type": "OAUTH",
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "X-Snowflake-Authorization-Token-Type": "OAUTH",
     };
   }
   
@@ -92,9 +96,9 @@ async function executeQuery(sql: string): Promise<Record<string, unknown>[]> {
     body: JSON.stringify({
       statement: sql,
       timeout: 60,
-      database: "CUSTOMER_DEMO",
+      database: "CUSTOMER_360_DEMO",
       schema: "PUBLIC",
-      warehouse: "COMPUTE_WH",
+      warehouse: "C360_WH",
     }),
   });
 
@@ -140,24 +144,24 @@ function transformData(result: { resultSetMetaData?: { rowType?: Array<{ name: s
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get("q") || "";
+    const searchQuery = searchParams.get("q") || "";
     const limit = parseInt(searchParams.get("limit") || "20");
 
     let sql: string;
-    if (query) {
-      const escapedQuery = query.replace(/'/g, "''");
+    if (searchQuery) {
+      const escapedQuery = searchQuery.replace(/'/g, "''");
       sql = `
-        SELECT CUSTOMER_ID, ADDRESS, AGE, AGE_GROUP, GENDER, INCOME_BRACKET, MARITAL_STATUS
-        FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS
-        WHERE UPPER(CUSTOMER_ID) LIKE UPPER('%${escapedQuery}%')
-           OR UPPER(ADDRESS) LIKE UPPER('%${escapedQuery}%')
+        SELECT CUSTOMER_ID, REGION, AGE, AGE_GROUP, GENDER, INCOME_BRACKET, HOMEOWNER_STATUS
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS
+        WHERE CAST(CUSTOMER_ID AS VARCHAR) LIKE '%${escapedQuery}%'
+           OR UPPER(REGION) LIKE UPPER('%${escapedQuery}%')
         ORDER BY CUSTOMER_ID
         LIMIT ${limit}
       `;
     } else {
       sql = `
-        SELECT CUSTOMER_ID, ADDRESS, AGE, AGE_GROUP, GENDER, INCOME_BRACKET, MARITAL_STATUS
-        FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS
+        SELECT CUSTOMER_ID, REGION, AGE, AGE_GROUP, GENDER, INCOME_BRACKET, HOMEOWNER_STATUS
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS
         ORDER BY CUSTOMER_ID
         LIMIT ${limit}
       `;

@@ -33,6 +33,7 @@ import {
   Menu,
   X,
   Mic,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { Dashboard } from "@/components/dashboard";
@@ -560,8 +561,8 @@ export default function ChatInterface() {
         transform transition-transform duration-200 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="flex justify-center py-1 bg-[#FFDD00] relative">
-          <img src="/logo.jpg" alt="Aviva" className="h-20 lg:h-24 object-contain" />
+        <div className="flex justify-center py-1 bg-[var(--brand-accent,#29B5E8)] relative">
+          <img src="/logo.png" alt="Company Logo" className="h-20 lg:h-24 object-contain" />
           <button
             onClick={() => setSidebarOpen(false)}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 lg:hidden"
@@ -655,6 +656,14 @@ export default function ChatInterface() {
         )}
 
         <div className="mt-auto p-4 border-t border-sidebar-border">
+          <Link
+            href="/setup/branding"
+            className="flex items-center gap-2 text-sm text-sidebar-foreground hover:text-primary transition-colors mb-3"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <Settings className="h-4 w-4" />
+            Setup
+          </Link>
           <Link
             href="/guide"
             className="flex items-center gap-2 text-sm text-sidebar-foreground hover:text-primary transition-colors mb-3"

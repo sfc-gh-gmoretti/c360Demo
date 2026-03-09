@@ -33,8 +33,7 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-RUN mkdir -p /app/.snowflake/keys
-COPY --chown=nextjs:nodejs keys/rsa_key.p8 /app/.snowflake/keys/
+RUN mkdir -p /app/.snowflake/keys /app/config
 ENV HOME=/app
 
 USER nextjs

@@ -1,24 +1,30 @@
 spec:
   containers:
-    - name: aviva-customer360
-      image: <REPO_URL>/aviva-customer360:latest
+    - name: c360-app
+      image: sfseeurope-eu-demo86c.registry.snowflakecomputing.com/customer_360_demo/public/c360_images/c360-app:v10
       env:
-        SNOWFLAKE_ACCOUNT: "{{ snowflake.account }}"
-        SNOWFLAKE_HOST: "{{ snowflake.host }}"
-        SNOWFLAKE_DATABASE: CUSTOMER_DEMO
-        SNOWFLAKE_SCHEMA: PUBLIC
-        SNOWFLAKE_WAREHOUSE: DEMO_WH
-        CORTEX_AGENT_NAME: CUSTOMER_DEMO.PUBLIC.CUSTOMER_360
+        SNOWFLAKE_ACCOUNT: "sfseeurope-eu-demo86c"
+        SNOWFLAKE_USER: "admin"
+        SNOWFLAKE_DATABASE: "CUSTOMER_360_DEMO"
+        SNOWFLAKE_SCHEMA: "PUBLIC"
+        SNOWFLAKE_WAREHOUSE: "C360_WH"
+        SNOWFLAKE_HOST: "sfseeurope-eu-demo86c.snowflakecomputing.com"
+      secrets:
+        - snowflakeSecret: CUSTOMER_360_DEMO.PUBLIC.C360_PAT
+          secretKeyRef: secret_string
+          envVarName: SNOWFLAKE_PAT
+      readinessProbe:
+        port: 3000
+        path: "/"
       resources:
-        requests:
-          cpu: 0.5
-          memory: 1Gi
         limits:
-          cpu: 2
-          memory: 4Gi
+          memory: "13Gi"
+          cpu: "3"
+        requests:
+          memory: "0.5Gi"
+          cpu: "0.5"
   endpoints:
     - name: app
-      port: 8000
+      port: 3000
       public: true
-  networkPolicyConfig:
-    allowInternetEgress: true
+

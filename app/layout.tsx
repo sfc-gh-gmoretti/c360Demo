@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aviva Customer 360 Intelligence",
-  description: "AI-powered customer insights and analytics for Aviva",
+  title: "Customer 360 Intelligence",
+  description: "AI-powered customer insights and analytics",
   icons: {
     icon: "/favicon.ico",
   },

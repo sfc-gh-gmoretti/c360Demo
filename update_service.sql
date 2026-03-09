@@ -1,0 +1,28 @@
+ALTER SERVICE CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_360_APP
+FROM SPECIFICATION $$
+spec:
+  containers:
+    - name: c360-app
+      image: sfseeurope-eu-demo86c.registry.snowflakecomputing.com/customer_360_demo/public/c360_images/c360-app:v6
+      env:
+        SNOWFLAKE_ACCOUNT: sfseeurope-eu-demo86c
+        SNOWFLAKE_USER: admin
+        SNOWFLAKE_DATABASE: CUSTOMER_360_DEMO
+        SNOWFLAKE_SCHEMA: PUBLIC
+        SNOWFLAKE_WAREHOUSE: C360_WH
+        SNOWFLAKE_HOST: sfseeurope-eu-demo86c.snowflakecomputing.com
+      readinessProbe:
+        port: 3000
+        path: /
+      resources:
+        limits:
+          memory: 13Gi
+          cpu: 3
+        requests:
+          memory: 0.5Gi
+          cpu: 0.5
+  endpoints:
+    - name: app
+      port: 3000
+      public: true
+$$;

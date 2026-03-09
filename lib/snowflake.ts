@@ -20,9 +20,9 @@ function getOAuthToken(): string | null {
 
 function getConfig(): snowflake.ConnectionOptions {
   const base = {
-    account: process.env.SNOWFLAKE_ACCOUNT || "SFSEEUROPE-EU_DEMO86",
-    warehouse: process.env.SNOWFLAKE_WAREHOUSE || "DEMO_WH",
-    database: process.env.SNOWFLAKE_DATABASE || "CUSTOMER_DEMO",
+    account: process.env.SNOWFLAKE_ACCOUNT || "",
+    warehouse: process.env.SNOWFLAKE_WAREHOUSE || "C360_WH",
+    database: process.env.SNOWFLAKE_DATABASE || "CUSTOMER_360_DEMO",
     schema: process.env.SNOWFLAKE_SCHEMA || "PUBLIC",
   };
 
@@ -99,9 +99,10 @@ export async function query<T>(sql: string, retries = 1): Promise<T[]> {
 
 export function getAccountUrl(): string {
   const token = getOAuthToken();
-  if (token && process.env.SNOWFLAKE_HOST) {
-    return `https://${process.env.SNOWFLAKE_HOST}`;
+  if (token) {
+    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
+    return `https://${host}`;
   }
-  const account = process.env.SNOWFLAKE_ACCOUNT || "SFSEEUROPE-EU_DEMO86";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
   return `https://${account}.snowflakecomputing.com`;
 }

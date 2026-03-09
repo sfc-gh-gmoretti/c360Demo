@@ -1091,8 +1091,8 @@ SELECT CROSS_SELL_PROPENSITY!PREDICT_PROBA(
                   code: `-- Service specification
 spec:
   containers:
-    - name: aviva-customer360
-      image: /customer_demo/public/images/aviva-customer360:v11
+    - name: customer-360
+      image: /customer_demo/public/images/customer-360:v11
       env:
         SNOWFLAKE_WAREHOUSE: COMPUTE_WH
         CORTEX_AGENT_NAME: CUSTOMER_DEMO.PUBLIC.CUSTOMER_360
@@ -1109,7 +1109,7 @@ spec:
       public: true
   networkPolicyConfig:
     allowInternetEgress: true`,
-                  footer: "Endpoint: https://atey5-sfseeurope-eu-demo86.snowflakecomputing.app"
+                  footer: "Endpoint: https://[your-service]-[your-account].snowflakecomputing.app"
                 }
               ].map((service, i) => (
                 <div key={i} className="glass-card p-6 fade-in" style={{ animationDelay: `${i * 0.1}s`, transform: "translateY(20px)" }}>

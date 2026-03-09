@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+config-app
+docs
+*.md
+docker-compose.yml
+.gitignore

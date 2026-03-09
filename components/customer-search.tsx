@@ -5,12 +5,12 @@ import { Search, User, X } from "lucide-react";
 
 interface Customer {
   CUSTOMER_ID: string;
-  ADDRESS: string;
+  REGION: string;
   AGE: number;
   AGE_GROUP: string;
   GENDER: string;
   INCOME_BRACKET: string;
-  MARITAL_STATUS: string;
+  HOMEOWNER_STATUS: string;
 }
 
 interface CustomerSearchProps {
@@ -114,7 +114,7 @@ export function CustomerSearch({ onSelectCustomer, selectedCustomerId, onClearSe
                 <span className="text-xs text-muted-foreground">{customer.AGE_GROUP}</span>
               </div>
               <div className="text-xs text-muted-foreground mt-1 truncate">
-                {customer.ADDRESS}
+                {customer.REGION}
               </div>
               <div className="flex gap-2 mt-1">
                 <span className="text-xs bg-muted px-2 py-0.5 rounded">{customer.GENDER}</span>

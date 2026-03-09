@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import fs from "fs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -33,7 +34,8 @@ function generateJwtToken(): string {
 
   const user = (process.env.SNOWFLAKE_USER || "admin").toUpperCase();
   const privateKey = getPrivateKey();
-  const qualifiedAccountName = "SFSEEUROPE-EU_DEMO86";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
+  const qualifiedAccountName = account.replace(/-/g, "_").replace(/\./g, "_").toUpperCase();
 
   const privateKeyObj = crypto.createPrivateKey(privateKey);
   const publicKeyDer = crypto.createPublicKey(privateKeyObj).export({ type: "spki", format: "der" });
@@ -55,10 +57,12 @@ function generateJwtToken(): string {
 
 function getAccountBaseUrl(): string {
   const token = getOAuthToken();
-  if (token && process.env.SNOWFLAKE_HOST) {
-    return `https://${process.env.SNOWFLAKE_HOST}`;
+  if (token) {
+    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
+    return `https://${host}`;
   }
-  return "https://SFSEEUROPE-EU_DEMO86.snowflakecomputing.com";
+  const account = process.env.SNOWFLAKE_ACCOUNT || "";
+  return `https://${account}.snowflakecomputing.com`;
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -67,9 +71,9 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   if (oauthToken) {
     return {
       "Authorization": `Bearer ${oauthToken}`,
+      "X-Snowflake-Authorization-Token-Type": "OAUTH",
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "X-Snowflake-Authorization-Token-Type": "OAUTH",
     };
   }
   
@@ -162,7 +166,9 @@ export async function POST(
     const int = interactions[0] || {};
     const cweData = cwe[0] || {};
 
-    const prompt = `You are a Senior Financial Adviser at Aviva, the UK's leading insurance and savings company. Analyze this customer's complete profile and provide strategic recommendations using ONLY genuine Aviva products.
+    const companyName = process.env.COMPANY_NAME || "Your Company";
+
+    const prompt = `You are a Senior Financial Adviser at ${companyName}. Analyze this customer's complete profile and provide strategic recommendations.
 
 === CUSTOMER PROFILE: ${customerId} ===
 
@@ -217,7 +223,7 @@ INVESTMENT MINDSET:
 - Marketing Engagement Level: ${m.MARKETING_ENGAGEMENT_LEVEL || 'Unknown'}
 - Responsiveness to Marketing: ${m.RESPONSIVENESS_TO_MARKETING || 'Unknown'}
 
-CURRENT AVIVA PRODUCTS:
+CURRENT PRODUCTS:
 - Has Pension (Current/Staff): ${pr.HAS_PENSIONS_CURRENT_OR_STAFF === 'TRUE' ? 'Yes' : 'No'}
 - Has ISA: ${pr.HAS_ISA === 'TRUE' ? 'Yes' : 'No'}
 - Has Bond: ${pr.HAS_BOND === 'TRUE' ? 'Yes' : 'No'}
@@ -263,59 +269,47 @@ SERVICE HISTORY (CWE Data):
 - Average Hold Time: ${cweData.AVERAGE_HOLD_TIME_MINUTES || 0} mins
 - Service Quality Indicator: ${cweData.SERVICE_QUALITY_INDICATOR || 'N/A'}
 
-=== AVIVA PRODUCT PORTFOLIO (Use ONLY these genuine products) ===
+=== PRODUCT PORTFOLIO ===
+
+Based on the customer data, recommend appropriate financial products including:
 
 **RETIREMENT & PENSIONS:**
-- Aviva Pension (SIPP) - Self-invested personal pension with flexible contributions from £25/month
-- Universal Retirement Fund - Target-date retirement fund that automatically adjusts risk
-- Pension Consolidation Service - Combine multiple pensions into one Aviva pension
-- Income Drawdown - Flexible retirement income from pension pot
+- Personal Pension (SIPP) - Flexible pension contributions
+- Target-Date Retirement Fund - Risk-adjusted over time
+- Pension Consolidation - Combine multiple pensions
+- Income Drawdown - Flexible retirement income
 
 **INVESTMENTS & SAVINGS:**
-- Aviva Stocks & Shares ISA - Tax-free investing up to £20,000/year
-- Aviva Investment Account - General investment account for amounts above ISA allowance
-- Ready-Made Funds (by Aviva Investors):
-  * Aviva Investors Multi-asset Core Fund I (Cautious)
-  * Aviva Investors Multi-asset Core Fund II (Balanced)
-  * Aviva Investors Multi-asset Core Fund III (Growth)
-  * Aviva Investors Multi-asset Core Fund IV (Aggressive)
-- Experts' Shortlist Funds - Curated selection by Aviva Investors
-- Self-Select Funds - Over 5,000 funds available
-
-**AVIVA INVESTORS FUND RANGE:**
-- Aviva Investors UK Listed Equity Income Fund
-- Aviva Investors Global Equity Income Fund
-- Aviva Investors UK Index Tracking Fund
-- Aviva Investors Climate Transition Global Equity Fund (ESG)
-- Aviva Investors Stewardship Funds (Sustainable/ESG)
-- Aviva Investors Multi-Strategy Target Return Fund
-- Aviva Investors Strategic Bond Fund
+- Stocks & Shares ISA - Tax-free investing up to £20,000/year
+- Investment Account - For amounts above ISA allowance
+- Ready-Made Funds (by risk level):
+  * Cautious Fund
+  * Balanced Fund
+  * Growth Fund
+  * Aggressive Fund
 
 **PROTECTION:**
-- Aviva Life Insurance - Term life and whole of life options
-- Aviva Income Protection - Protects income if unable to work
-- Aviva Critical Illness Cover - Lump sum on diagnosis
-- Aviva Family Income Benefit - Regular payments to family
-- Over 50s Life Insurance - Guaranteed acceptance
+- Life Insurance - Term and whole of life options
+- Income Protection - Protects income if unable to work
+- Critical Illness Cover - Lump sum on diagnosis
+- Family Income Benefit - Regular payments to family
 
 **HEALTH:**
-- Aviva Health Insurance - Private medical cover
-- Aviva Dental Insurance
-- Aviva Health Assessments
-- DigiCare+ App - Digital GP, mental health support
+- Health Insurance - Private medical cover
+- Dental Insurance
+- Health Assessments
 
-**GENERAL INSURANCE (Note: Limited data available):**
-- Aviva Car Insurance
-- Aviva Home Insurance (Buildings & Contents)
-- Aviva Landlord Insurance
-- Aviva Travel Insurance
+**GENERAL INSURANCE:**
+- Car Insurance
+- Home Insurance (Buildings & Contents)
+- Travel Insurance
 
 === ANALYSIS REQUIRED ===
 
 Provide a comprehensive analysis with the following sections:
 
 ## 1. CUSTOMER SUMMARY
-Brief overview of who this customer is, their life stage, financial situation, and relationship with Aviva.
+Brief overview of who this customer is, their life stage, financial situation, and relationship with ${companyName}.
 
 ## 2. RISK PROFILE ASSESSMENT
 - Evaluate if current investments align with their stated risk tolerance
@@ -335,8 +329,8 @@ Prioritize based on:
 3. Protection needs based on dependents/mortgage
 4. Growth potential aligned with risk profile
 
-## 4. AVIVA INVESTORS FUND RECOMMENDATIONS
-Based on their risk profile and ESG preferences, recommend specific funds from the Aviva Investors range.
+## 4. FUND RECOMMENDATIONS
+Based on their risk profile and ESG preferences, recommend specific funds.
 
 ## 5. DATA GAPS - ADDITIONAL PRODUCTS
 Identify what additional information would be needed to recommend:
