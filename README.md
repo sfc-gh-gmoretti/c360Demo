@@ -36,10 +36,6 @@ A comprehensive Customer 360 application for financial advisers that combines na
 - Interactive feature sliders (age, income, pension value, etc.)
 - Real-time probability scoring
 
-### 🎙️ Voice Recorder (Planned)
-- Audio transcription via Snowflake AI_TRANSCRIBE
-- Conversation analysis with Cortex Complete
-
 ## Architecture
 
 ```
