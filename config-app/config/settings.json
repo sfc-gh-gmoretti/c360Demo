@@ -1,0 +1,19 @@
+{
+  "companyName": "Snowflake",
+  "companyNameFull": "Snow Insurance ",
+  "primaryColor": "#ffffff",
+  "secondaryColor": "#0EA5E9",
+  "logoPath": "/config/logo.png",
+  "snowflake": {
+    "account": "",
+    "user": "",
+    "database": "CUSTOMER_360_DEMO",
+    "schema": "PUBLIC",
+    "warehouse": "C360_WH"
+  },
+  "deployment": {
+    "computePool": "C360_WEBAPP_POOL",
+    "imageTag": "v1",
+    "registry": ""
+  }
+}

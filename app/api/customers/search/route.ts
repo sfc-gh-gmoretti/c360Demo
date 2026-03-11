@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
+import { NextResponse } from "next/server";
 import fs from "fs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -34,8 +33,7 @@ function generateJwtToken(): string {
 
   const user = (process.env.SNOWFLAKE_USER || "admin").toUpperCase();
   const privateKey = getPrivateKey();
-  const account = process.env.SNOWFLAKE_ACCOUNT || "";
-  const qualifiedAccountName = account.replace(/-/g, "_").replace(/\./g, "_").toUpperCase();
+  const qualifiedAccountName = "SFSEEUROPE-EU_DEMO86";
 
   const privateKeyObj = crypto.createPrivateKey(privateKey);
   const publicKeyDer = crypto.createPublicKey(privateKeyObj).export({ type: "spki", format: "der" });
@@ -57,12 +55,10 @@ function generateJwtToken(): string {
 
 function getAccountBaseUrl(): string {
   const token = getOAuthToken();
-  if (token) {
-    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
-    return `https://${host}`;
+  if (token && process.env.SNOWFLAKE_HOST) {
+    return `https://${process.env.SNOWFLAKE_HOST}`;
   }
-  const account = process.env.SNOWFLAKE_ACCOUNT || "";
-  return `https://${account}.snowflakecomputing.com`;
+  return "https://SFSEEUROPE-EU_DEMO86.snowflakecomputing.com";
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -71,7 +67,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   if (oauthToken) {
     return {
       "Authorization": `Bearer ${oauthToken}`,
-      "X-Snowflake-Authorization-Token-Type": "OAUTH",
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
@@ -141,38 +136,126 @@ function transformData(result: { resultSetMetaData?: { rowType?: Array<{ name: s
   });
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const searchQuery = searchParams.get("q") || "";
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const [
+      ageGroupsResult,
+      incomeResult,
+      totalCustomersResult,
+      productsResult,
+      channelsResult,
+      preferencesResult,
+      financialResult,
+      segmentValueResult,
+      activityResult,
+    ] = await Promise.all([
+      executeQuery(`
+        SELECT AGE_GROUP as NAME, COUNT(*) as VALUE 
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_360_DEMOGRAPHICS 
+        GROUP BY AGE_GROUP 
+        ORDER BY CASE 
+          WHEN AGE_GROUP = '18-25' THEN 1 
+          WHEN AGE_GROUP = '26-35' THEN 2 
+          WHEN AGE_GROUP = '36-45' THEN 3 
+          WHEN AGE_GROUP = '46-55' THEN 4 
+          WHEN AGE_GROUP = '56-65' THEN 5 
+          ELSE 6 END
+      `),
+      executeQuery(`
+        SELECT INCOME_BRACKET as NAME, COUNT(*) as VALUE 
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_360_DEMOGRAPHICS 
+        GROUP BY INCOME_BRACKET 
+        ORDER BY VALUE DESC 
+        LIMIT 6
+      `),
+      executeQuery(`SELECT COUNT(*) as TOTAL FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_360_DEMOGRAPHICS`),
+      executeQuery(`
+        SELECT PRODUCT_TYPE as NAME, COUNT(*) as VALUE 
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS 
+        GROUP BY PRODUCT_TYPE 
+        ORDER BY VALUE DESC
+      `),
+      executeQuery(`
+        SELECT MARKETING_CHANNEL as NAME, COUNT(*) as VALUE 
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_INTERACTION_AND_LEADS 
+        GROUP BY MARKETING_CHANNEL 
+        ORDER BY VALUE DESC
+      `),
+      executeQuery(`
+        SELECT PREFERRED_COMMUNICATION_CHANNEL as NAME, COUNT(*) as VALUE 
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_COMMUNICATION 
+        GROUP BY PREFERRED_COMMUNICATION_CHANNEL 
+        ORDER BY VALUE DESC
+      `),
+      executeQuery(`
+        SELECT 
+          SUM(p.TOTAL_PENSION_VALUE) as TOTAL_PENSION,
+          AVG(p.TOTAL_PENSION_VALUE) as AVG_PENSION,
+          SUM(p.FUND_VALUE) as TOTAL_POLICY
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS p
+      `),
+      executeQuery(`
+        SELECT 
+          c.INCOME_BRACKET as SEGMENT, 
+          SUM(p.TOTAL_PENSION_VALUE) as VALUE 
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_360_DEMOGRAPHICS c
+        JOIN CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS p ON c.CUSTOMER_ID = p.CUSTOMER_ID
+        GROUP BY c.INCOME_BRACKET 
+        ORDER BY VALUE DESC
+      `),
+      executeQuery(`
+        SELECT 
+          TO_CHAR(DATE_TRUNC('week', LAST_INTERACTION_DATE), 'Mon DD') as DATE,
+          COUNT(*) as INTERACTIONS
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_INTERACTION_AND_LEADS 
+        WHERE LAST_INTERACTION_DATE >= DATEADD(month, -3, CURRENT_DATE())
+        GROUP BY DATE_TRUNC('week', LAST_INTERACTION_DATE)
+        ORDER BY DATE_TRUNC('week', LAST_INTERACTION_DATE)
+      `),
+    ]);
 
-    let sql: string;
-    if (searchQuery) {
-      const escapedQuery = searchQuery.replace(/'/g, "''");
-      sql = `
-        SELECT CUSTOMER_ID, REGION, AGE, AGE_GROUP, GENDER, INCOME_BRACKET, HOMEOWNER_STATUS
-        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS
-        WHERE CAST(CUSTOMER_ID AS VARCHAR) LIKE '%${escapedQuery}%'
-           OR UPPER(REGION) LIKE UPPER('%${escapedQuery}%')
-        ORDER BY CUSTOMER_ID
-        LIMIT ${limit}
-      `;
-    } else {
-      sql = `
-        SELECT CUSTOMER_ID, REGION, AGE, AGE_GROUP, GENDER, INCOME_BRACKET, HOMEOWNER_STATUS
-        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS
-        ORDER BY CUSTOMER_ID
-        LIMIT ${limit}
-      `;
-    }
+    const shortenIncomeBracket = (bracket: string): string => {
+      const map: Record<string, string> = {
+        "£0-£15,000": "0-15k",
+        "£15,001-£25,000": "15-25k",
+        "£25,001-£35,000": "25-35k",
+        "£35,001-£50,000": "35-50k",
+        "£50,001-£75,000": "50-75k",
+        "£75,001-£100,000": "75-100k",
+        "£100,001-£150,000": "100-150k",
+        "£150,001+": "150k+",
+      };
+      return map[bracket] || bracket;
+    };
 
-    const customers = await executeQuery(sql);
-    return NextResponse.json({ customers });
+    const dashboardData = {
+      demographics: {
+        ageGroups: ageGroupsResult.map((r) => ({ name: String(r.NAME), value: Number(r.VALUE) })),
+        regions: incomeResult.map((r) => ({ name: shortenIncomeBracket(String(r.NAME)), value: Number(r.VALUE) })),
+        totalCustomers: Number(totalCustomersResult[0]?.TOTAL || 0),
+      },
+      products: {
+        distribution: productsResult.map((r) => ({ name: String(r.NAME), value: Number(r.VALUE) })),
+        topProducts: productsResult.slice(0, 5).map((r) => ({ name: String(r.NAME), count: Number(r.VALUE) })),
+      },
+      engagement: {
+        channels: channelsResult.map((r) => ({ name: String(r.NAME), value: Number(r.VALUE) })),
+        preferences: preferencesResult.map((r) => ({ name: String(r.NAME), value: Number(r.VALUE) })),
+        recentActivity: activityResult.map((r) => ({ date: String(r.DATE), interactions: Number(r.INTERACTIONS) })),
+      },
+      financial: {
+        totalPensionValue: Number(financialResult[0]?.TOTAL_PENSION || 0),
+        avgPensionValue: Number(financialResult[0]?.AVG_PENSION || 0),
+        totalPolicyValue: Number(financialResult[0]?.TOTAL_POLICY || 0),
+        valueBySegment: segmentValueResult.map((r) => ({ segment: shortenIncomeBracket(String(r.SEGMENT)), value: Number(r.VALUE) })),
+      },
+    };
+
+    return NextResponse.json(dashboardData);
   } catch (error) {
-    console.error("Customer search error:", error);
+    console.error("Dashboard API error:", error);
     return NextResponse.json(
-      { error: "Failed to search customers" },
+      { error: "Failed to fetch dashboard data" },
       { status: 500 }
     );
   }

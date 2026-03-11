@@ -1,10 +1,9 @@
-import type { Metadata } from "next";
 import "./globals.css";
 import { Stepper } from "@/components/stepper";
 
-export const metadata: Metadata = {
-  title: "Customer 360 - Configuration",
-  description: "Configure and deploy your Customer 360 Intelligence app",
+export const metadata = {
+  title: "Customer 360 - Configuration Wizard",
+  description: "Setup and configure the Customer 360 Intelligence application",
 };
 
 export default function RootLayout({
@@ -27,9 +26,9 @@ export default function RootLayout({
                   <p className="text-xs text-gray-500">Configuration Wizard</p>
                 </div>
               </div>
-              <span className="text-sm text-gray-400">
+              <div className="text-sm text-gray-500">
                 Powered by Snowflake
-              </span>
+              </div>
             </div>
           </header>
 

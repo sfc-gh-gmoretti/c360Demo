@@ -1,18 +1,11 @@
 spec:
   containers:
     - name: c360-app
-      image: sfseeurope-eu-demo86c.registry.snowflakecomputing.com/customer_360_demo/public/c360_images/c360-app:v10
+      image: sfseeurope-eu-demo86c.registry.snowflakecomputing.com/customer_360_demo/public/c360_images/customer360:latest
       env:
-        SNOWFLAKE_ACCOUNT: "sfseeurope-eu-demo86c"
-        SNOWFLAKE_USER: "admin"
         SNOWFLAKE_DATABASE: "CUSTOMER_360_DEMO"
         SNOWFLAKE_SCHEMA: "PUBLIC"
         SNOWFLAKE_WAREHOUSE: "C360_WH"
-        SNOWFLAKE_HOST: "sfseeurope-eu-demo86c.snowflakecomputing.com"
-      secrets:
-        - snowflakeSecret: CUSTOMER_360_DEMO.PUBLIC.C360_PAT
-          secretKeyRef: secret_string
-          envVarName: SNOWFLAKE_PAT
       readinessProbe:
         port: 3000
         path: "/"

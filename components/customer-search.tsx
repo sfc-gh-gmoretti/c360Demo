@@ -5,7 +5,7 @@ import { Search, User, X } from "lucide-react";
 
 interface Customer {
   CUSTOMER_ID: string;
-  REGION: string;
+  ADDRESS: string;
   AGE: number;
   AGE_GROUP: string;
   GENDER: string;
@@ -114,7 +114,7 @@ export function CustomerSearch({ onSelectCustomer, selectedCustomerId, onClearSe
                 <span className="text-xs text-muted-foreground">{customer.AGE_GROUP}</span>
               </div>
               <div className="text-xs text-muted-foreground mt-1 truncate">
-                {customer.REGION}
+                {customer.ADDRESS}
               </div>
               <div className="flex gap-2 mt-1">
                 <span className="text-xs bg-muted px-2 py-0.5 rounded">{customer.GENDER}</span>

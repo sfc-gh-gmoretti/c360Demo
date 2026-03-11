@@ -1,28 +1,15 @@
 import { NextRequest } from "next/server";
-import { spawn } from "child_process";
-import { existsSync } from "fs";
-import { resolve } from "path";
-import { getRegistryUrl } from "@/lib/constants";
+import { spawn, exec } from "child_process";
+import { promisify } from "util";
+import { getRegistryUrl, SNOWFLAKE_OBJECTS } from "@/lib/constants";
 
-function getCustomer360Path(): string {
-  if (existsSync("/app/customer-360/Dockerfile")) {
-    return "/app/customer-360";
-  }
-  const localPath = resolve(process.cwd(), "..");
-  if (existsSync(resolve(localPath, "Dockerfile"))) {
-    return localPath;
-  }
-  return process.cwd();
-}
+const execAsync = promisify(exec);
 
 export async function POST(request: NextRequest) {
-  const { account, imageTag } = await request.json();
+  const config = await request.json();
+  const imageTag = config.imageTag || "v1";
 
   const encoder = new TextEncoder();
-  const repoUrl = getRegistryUrl(account);
-  const fullImageName = `${repoUrl}/c360-app:${imageTag}`;
-  const dockerContext = getCustomer360Path();
-
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: object) => {
@@ -33,88 +20,132 @@ export async function POST(request: NextRequest) {
         send({ log: { message, type } });
       };
 
-      const runCommand = (
-        cmd: string,
-        args: string[]
-      ): Promise<void> => {
-        return new Promise((resolve, reject) => {
-          const proc = spawn(cmd, args, {
-            env: process.env,
-            cwd: dockerContext,
-            shell: true,
-          });
-
-          proc.stdout.on("data", (data) => {
-            const lines = data.toString().split("\n").filter(Boolean);
-            lines.forEach((line: string) => log(line));
-          });
-
-          proc.stderr.on("data", (data) => {
-            const lines = data.toString().split("\n").filter(Boolean);
-            lines.forEach((line: string) => log(line));
-          });
-
-          proc.on("close", (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`Command failed with code ${code}`));
-          });
-
-          proc.on("error", reject);
-        });
-      };
-
-      const runShellScript = (script: string): Promise<void> => {
-        return new Promise((resolve, reject) => {
-          const proc = spawn("bash", ["-c", script], {
-            env: process.env,
-            cwd: dockerContext,
-          });
-
-          proc.stdout.on("data", (data) => {
-            const lines = data.toString().split("\n").filter(Boolean);
-            lines.forEach((line: string) => log(line));
-          });
-
-          proc.stderr.on("data", (data) => {
-            const lines = data.toString().split("\n").filter(Boolean);
-            lines.forEach((line: string) => log(line));
-          });
-
-          proc.on("close", (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`Command failed with code ${code}`));
-          });
-
-          proc.on("error", reject);
-        });
-      };
-
       try {
-        send({ stage: "building" });
-        log("Building Docker image for linux/amd64 using buildx...");
-        log(`Context: ${dockerContext}`);
-        await runCommand("docker", [
-          "buildx", "build", "--platform", "linux/amd64", "--load",
-          "-t", "c360-app:latest", "."
-        ]);
-        log("Docker image built successfully", "success");
+        const registryUrl = getRegistryUrl(config.account);
+        const fullImageName = `${registryUrl}/c360-app:${imageTag}`;
 
-        send({ stage: "tagging" });
-        log(`Tagging image as ${fullImageName}...`);
-        await runCommand("docker", ["tag", "c360-app:latest", fullImageName]);
-        log("Image tagged", "success");
+        log("Checking Docker availability...");
+        try {
+          await execAsync("docker info");
+          log("Docker is running", "success");
+        } catch {
+          log("Docker is not running. Please start Docker Desktop.", "error");
+          return;
+        }
 
-        send({ stage: "pushing" });
-        log("Logging in and pushing to Snowflake registry...");
-        log("This may take a few minutes...");
-        await runShellScript(`snow spcs image-registry login && docker push "${fullImageName}"`);
-        log("Image pushed successfully!", "success");
+        log("Logging into Snowflake registry...");
+        try {
+          const loginProc = spawn("docker", [
+            "login",
+            registryUrl,
+            "-u", config.user,
+            "--password-stdin",
+          ]);
 
-        send({ stage: "complete", success: true });
-        log("Image is now available in Snowflake", "success");
+          loginProc.stdin.write(config.pat || config.password || "");
+          loginProc.stdin.end();
+
+          await new Promise<void>((resolve, reject) => {
+            let errorOutput = "";
+            loginProc.stderr.on("data", (data) => {
+              errorOutput += data.toString();
+            });
+            loginProc.on("close", (code) => {
+              if (code === 0) {
+                log("Logged into registry", "success");
+                resolve();
+              } else {
+                reject(new Error(`Login failed: ${errorOutput}`));
+              }
+            });
+          });
+        } catch (err) {
+          log(`Registry login error: ${(err as Error).message}`, "error");
+          return;
+        }
+
+        log(`Building Docker image: c360-app:${imageTag} for linux/amd64...`);
+        log("This may take several minutes...");
+
+        const buildArgs = [
+          "buildx", "build",
+          "--platform", "linux/amd64",
+          "--no-cache",
+          "--load",
+          "-t", `c360-app:${imageTag}`,
+          "-t", fullImageName,
+          "-f", "Dockerfile",
+          "."
+        ];
+
+        const webappDir = process.env.WEBAPP_DIR || "/webapp";
+        const buildProc = spawn("docker", buildArgs, {
+          cwd: webappDir,
+        });
+
+        await new Promise<void>((resolve, reject) => {
+          buildProc.stdout.on("data", (data) => {
+            const lines = data.toString().split("\n").filter(Boolean);
+            for (const line of lines) {
+              if (line.includes("Step") || line.includes("Successfully")) {
+                log(line);
+              }
+            }
+          });
+
+          buildProc.stderr.on("data", (data) => {
+            const lines = data.toString().split("\n").filter(Boolean);
+            for (const line of lines) {
+              if (line.includes("#") || line.includes("=>") || line.includes("DONE")) {
+                log(line);
+              }
+            }
+          });
+
+          buildProc.on("close", (code) => {
+            if (code === 0) {
+              log("Docker build completed", "success");
+              resolve();
+            } else {
+              reject(new Error(`Docker build failed with code ${code}`));
+            }
+          });
+        });
+
+        log(`Pushing image to Snowflake: ${fullImageName}...`);
+        log("This may take several minutes for the first push...");
+
+        const pushProc = spawn("docker", ["push", fullImageName]);
+
+        await new Promise<void>((resolve, reject) => {
+          pushProc.stdout.on("data", (data) => {
+            const text = data.toString().trim();
+            if (text) log(text);
+          });
+
+          pushProc.stderr.on("data", (data) => {
+            const text = data.toString().trim();
+            if (text && !text.includes("Waiting") && !text.includes("Preparing")) {
+              log(text);
+            }
+          });
+
+          pushProc.on("close", (code) => {
+            if (code === 0) {
+              log("Image pushed successfully!", "success");
+              resolve();
+            } else {
+              reject(new Error(`Docker push failed with code ${code}`));
+            }
+          });
+        });
+
+        log("", "success");
+        log(`Image ready: ${fullImageName}`, "success");
+        send({ success: true, imageName: fullImageName });
       } catch (err) {
         log(`Error: ${(err as Error).message}`, "error");
-        send({ stage: "error", success: false });
+        send({ success: false });
       }
 
       controller.close();

@@ -6,9 +6,6 @@ export interface SnowflakeConfig {
   database?: string;
   schema?: string;
   warehouse?: string;
-  authMethod: "keypair" | "password" | "pat";
-  password?: string;
-  privateKey?: string;
   pat?: string;
 }
 
@@ -22,13 +19,9 @@ export function createConnection(config: SnowflakeConfig): Promise<snowflake.Con
       warehouse: config.warehouse,
     };
 
-    if (config.authMethod === "password" && config.password) {
-      connectionConfig.password = config.password;
-    } else if (config.authMethod === "keypair" && config.privateKey) {
-      connectionConfig.authenticator = "SNOWFLAKE_JWT";
-      connectionConfig.privateKey = config.privateKey;
-    } else if (config.authMethod === "pat" && config.pat) {
-      connectionConfig.password = config.pat;
+    if (config.pat) {
+      connectionConfig.authenticator = "PROGRAMMATIC_ACCESS_TOKEN";
+      connectionConfig.token = config.pat;
     }
 
     const connection = snowflake.createConnection(connectionConfig);
@@ -63,7 +56,7 @@ export function executeSQL(
 
 export function destroyConnection(connection: snowflake.Connection): Promise<void> {
   return new Promise((resolve) => {
-    connection.destroy((err) => {
+    connection.destroy(() => {
       resolve();
     });
   });

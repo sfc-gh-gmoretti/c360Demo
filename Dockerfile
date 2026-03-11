@@ -33,7 +33,10 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-RUN mkdir -p /app/.snowflake/keys /app/config
+RUN mkdir -p /app/.snowflake/keys /app/config /app/model
+COPY --chown=nextjs:nodejs config/settings.json /app/config/
+COPY --chown=nextjs:nodejs config/logo.png /app/config/
+COPY --chown=nextjs:nodejs model/cross_sell_model.joblib /app/model/
 ENV HOME=/app
 
 USER nextjs

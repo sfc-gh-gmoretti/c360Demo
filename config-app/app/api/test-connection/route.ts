@@ -5,15 +5,15 @@ export async function POST(request: NextRequest) {
   let connection = null;
   
   try {
-    const formData = await request.formData();
-    const configStr = formData.get("config") as string;
-    const config = JSON.parse(configStr) as SnowflakeConfig;
-    const privateKeyFile = formData.get("privateKey") as File | null;
-
-    if (config.authMethod === "keypair" && privateKeyFile) {
-      const keyContent = await privateKeyFile.text();
-      config.privateKey = keyContent;
-    }
+    const body = await request.json();
+    const config: SnowflakeConfig = {
+      account: body.account,
+      user: body.user,
+      pat: body.pat,
+      database: body.database,
+      schema: body.schema,
+      warehouse: body.warehouse,
+    };
 
     connection = await createConnection(config);
 

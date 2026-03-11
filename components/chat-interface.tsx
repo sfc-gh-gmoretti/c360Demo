@@ -32,13 +32,12 @@ import {
   BookOpen,
   Menu,
   X,
-  Mic,
   Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { Dashboard } from "@/components/dashboard";
 import { ScenarioSimulator } from "@/components/scenario-simulator";
-import VoiceRecorder from "@/components/voice-recorder";
+
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TypingText } from "@/components/typing-text";
 import { SmartChart } from "@/components/smart-chart";
@@ -123,7 +122,7 @@ export default function ChatInterface() {
   const [sqlDialogOpen, setSqlDialogOpen] = useState(false);
   const [selectedSql, setSelectedSql] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"chat" | "dashboard" | "simulator" | "voice">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "dashboard" | "simulator">("chat");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -608,17 +607,7 @@ export default function ChatInterface() {
               <TrendingUp className="h-4 w-4" />
               ML Simulator
             </button>
-            <button
-              onClick={() => setActiveTab("voice")}
-              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === "voice"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-sidebar-foreground hover:text-foreground"
-              }`}
-            >
-              <Mic className="h-4 w-4" />
-              Voice
-            </button>
+
           </div>
         </div>
 
@@ -702,13 +691,7 @@ export default function ChatInterface() {
             <TrendingUp className="h-5 w-5" />
             <span className="text-xs">ML Sim</span>
           </button>
-          <button
-            onClick={() => { setActiveTab("voice"); setSidebarOpen(false); }}
-            className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg ${activeTab === "voice" ? "text-primary" : "text-sidebar-foreground"}`}
-          >
-            <Mic className="h-5 w-5" />
-            <span className="text-xs">Voice</span>
-          </button>
+
         </div>
       </div>
 
@@ -717,8 +700,7 @@ export default function ChatInterface() {
           <Dashboard />
         ) : activeTab === "simulator" ? (
           <ScenarioSimulator onBack={() => setActiveTab("chat")} />
-        ) : activeTab === "voice" ? (
-          <VoiceRecorder />
+
         ) : (
           <>
             <header className="h-14 border-b border-border flex items-center px-4 lg:px-6">

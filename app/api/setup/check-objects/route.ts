@@ -133,6 +133,22 @@ export async function POST(request: NextRequest) {
       )
     );
 
+    results.push(
+      await checkObject(
+        SNOWFLAKE_OBJECTS.ML_MODEL_STAGE,
+        "stage",
+        `SHOW STAGES LIKE '${SNOWFLAKE_OBJECTS.ML_MODEL_STAGE}' IN SCHEMA ${SNOWFLAKE_OBJECTS.DATABASE}.${SNOWFLAKE_OBJECTS.SCHEMA}`
+      )
+    );
+
+    results.push(
+      await checkObject(
+        SNOWFLAKE_OBJECTS.ML_MODEL,
+        "ml_model",
+        `SHOW MODELS LIKE '${SNOWFLAKE_OBJECTS.ML_MODEL}' IN SCHEMA ${SNOWFLAKE_OBJECTS.DATABASE}.${SNOWFLAKE_OBJECTS.SCHEMA}`
+      )
+    );
+
     return NextResponse.json({ success: true, objects: results });
   } catch (err) {
     return NextResponse.json(

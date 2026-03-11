@@ -22,12 +22,21 @@ export interface Config {
   };
 }
 
-const CONFIG_PATH = process.env.CONFIG_PATH || "/app/config/settings.json";
+function getConfigPath(): string {
+  if (process.env.CONFIG_PATH) {
+    return process.env.CONFIG_PATH;
+  }
+  if (fs.existsSync("/app/config")) {
+    return "/app/config/settings.json";
+  }
+  return path.join(process.cwd(), "config", "settings.json");
+}
 
 export function getConfig(): Config {
+  const configPath = getConfigPath();
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      const data = fs.readFileSync(CONFIG_PATH, "utf-8");
+    if (fs.existsSync(configPath)) {
+      const data = fs.readFileSync(configPath, "utf-8");
       return JSON.parse(data);
     }
   } catch (err) {
@@ -59,12 +68,13 @@ export function saveConfig(config: Partial<Config>): void {
   const existing = getConfig();
   const merged = { ...existing, ...config };
 
-  const dir = path.dirname(CONFIG_PATH);
+  const configPath = getConfigPath();
+  const dir = path.dirname(configPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
+  fs.writeFileSync(configPath, JSON.stringify(merged, null, 2));
 }
 
 export function updateConfigSection<K extends keyof Config>(

@@ -99,9 +99,8 @@ export async function query<T>(sql: string, retries = 1): Promise<T[]> {
 
 export function getAccountUrl(): string {
   const token = getOAuthToken();
-  if (token) {
-    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
-    return `https://${host}`;
+  if (token && process.env.SNOWFLAKE_HOST) {
+    return `https://${process.env.SNOWFLAKE_HOST}`;
   }
   const account = process.env.SNOWFLAKE_ACCOUNT || "";
   return `https://${account}.snowflakecomputing.com`;

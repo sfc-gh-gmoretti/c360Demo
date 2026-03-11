@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { runAgent, type AgentMessage } from "@/lib/cortex-agent";
 
-const AGENT_NAME = process.env.CORTEX_AGENT_NAME || "CUSTOMER_DEMO.PUBLIC.CUSTOMER_360";
+const AGENT_NAME = process.env.CORTEX_AGENT_NAME || "CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_360_AGENT";
 
 export async function POST(request: NextRequest) {
   try {

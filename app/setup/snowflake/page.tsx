@@ -31,6 +31,8 @@ export default function SnowflakePage() {
   const [setupSteps, setSetupSteps] = useState<SetupStep[]>([]);
   const [objectStatuses, setObjectStatuses] = useState<ObjectStatus[]>([]);
   const [checkingObjects, setCheckingObjects] = useState(false);
+  const [modelDeploying, setModelDeploying] = useState(false);
+  const [modelStatus, setModelStatus] = useState<string | null>(null);
   const [config, setConfig] = useState({
     account: "",
     user: "",
@@ -175,6 +177,49 @@ export default function SnowflakePage() {
     }
   };
 
+  const deployModel = async () => {
+    setModelDeploying(true);
+    setModelStatus(null);
+
+    try {
+      const response = await fetch("/api/setup/deploy-model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) return;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value);
+        const lines = text.split("\n").filter((line) => line.startsWith("data:"));
+
+        for (const line of lines) {
+          const data = JSON.parse(line.replace("data: ", ""));
+          if (data.error) {
+            setModelStatus(`Error: ${data.error}`);
+          } else if (data.model) {
+            setModelStatus(`Model deployed: ${data.model}`);
+          } else if (data.progress) {
+            setModelStatus(data.progress);
+          }
+        }
+      }
+
+      await checkObjects();
+    } catch (err) {
+      setModelStatus(`Error: ${(err as Error).message}`);
+    } finally {
+      setModelDeploying(false);
+    }
+  };
+
   const allObjectsExist =
     objectStatuses.length > 0 && objectStatuses.every((o) => o.exists);
   const missingObjects = objectStatuses.filter((o) => !o.exists);
@@ -218,6 +263,16 @@ export default function SnowflakePage() {
       name: SNOWFLAKE_OBJECTS.EXTERNAL_ACCESS,
       type: "external_access",
       label: "External Access Integration",
+    },
+    {
+      name: SNOWFLAKE_OBJECTS.ML_MODEL_STAGE,
+      type: "stage",
+      label: "ML Model Stage",
+    },
+    {
+      name: SNOWFLAKE_OBJECTS.ML_MODEL,
+      type: "ml_model",
+      label: "Cross-Sell ML Model",
     },
   ];
 
@@ -399,24 +454,52 @@ export default function SnowflakePage() {
             </div>
 
             {connectionStatus === "connected" && (
-              <button
-                onClick={runSetup}
-                disabled={setupRunning}
-                className="btn-primary w-full flex items-center justify-center gap-2"
-              >
-                {setupRunning ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Creating Objects...
-                  </>
-                ) : missingObjects.length > 0 ? (
-                  `Create ${missingObjects.length} Missing Objects`
-                ) : objectStatuses.length === 0 ? (
-                  "Create All Objects"
-                ) : (
-                  "Recreate All Objects"
+              <div className="space-y-3">
+                <button
+                  onClick={runSetup}
+                  disabled={setupRunning}
+                  className="btn-primary w-full flex items-center justify-center gap-2"
+                >
+                  {setupRunning ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Creating Objects...
+                    </>
+                  ) : missingObjects.length > 0 ? (
+                    `Create ${missingObjects.length - (getObjectStatus(SNOWFLAKE_OBJECTS.ML_MODEL)?.exists ? 0 : 1)} Missing Objects`
+                  ) : objectStatuses.length === 0 ? (
+                    "Create All Objects"
+                  ) : (
+                    "Recreate All Objects"
+                  )}
+                </button>
+
+                {getObjectStatus(SNOWFLAKE_OBJECTS.ML_MODEL_STAGE)?.exists && !getObjectStatus(SNOWFLAKE_OBJECTS.ML_MODEL)?.exists && (
+                  <button
+                    onClick={deployModel}
+                    disabled={modelDeploying}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {modelDeploying ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Deploying ML Model...
+                      </>
+                    ) : (
+                      "Deploy ML Model to Registry"
+                    )}
+                  </button>
                 )}
-              </button>
+
+                {modelStatus && (
+                  <div className={`flex items-center gap-2 p-3 rounded-lg ${
+                    modelStatus.includes("Error") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"
+                  }`}>
+                    {modelStatus.includes("Error") ? <XCircle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
+                    <span className="text-sm">{modelStatus}</span>
+                  </div>
+                )}
+              </div>
             )}
 
             {setupSteps.length > 0 && (

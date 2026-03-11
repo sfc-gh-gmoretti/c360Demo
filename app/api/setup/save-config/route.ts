@@ -11,12 +11,15 @@ export async function POST(request: NextRequest) {
 
     const config = JSON.parse(configStr);
 
-    const configDir = process.env.CONFIG_PATH
+    let configDir = process.env.CONFIG_PATH
       ? path.dirname(process.env.CONFIG_PATH)
       : "/app/config";
 
     if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
+      configDir = path.join(process.cwd(), "config");
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
     }
 
     if (logo) {

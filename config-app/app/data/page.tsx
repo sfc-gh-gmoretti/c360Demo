@@ -32,9 +32,7 @@ export default function DataPage() {
   const [snowflakeConfig, setSnowflakeConfig] = useState<{
     account: string;
     user: string;
-    password?: string;
     pat?: string;
-    authMethod: string;
   } | null>(null);
 
   useEffect(() => {
@@ -88,9 +86,7 @@ export default function DataPage() {
           count: customerCount,
           account: snowflakeConfig.account,
           user: snowflakeConfig.user,
-          password: snowflakeConfig.password,
           pat: snowflakeConfig.pat,
-          authMethod: snowflakeConfig.authMethod,
           database: SNOWFLAKE_OBJECTS.DATABASE,
           schema: SNOWFLAKE_OBJECTS.SCHEMA,
           warehouse: SNOWFLAKE_OBJECTS.WAREHOUSE,

@@ -33,9 +33,10 @@ export async function POST(request: NextRequest) {
           warehouse: SNOWFLAKE_OBJECTS.WAREHOUSE,
         };
 
-        if (config.authMethod === "pat") {
-          connectionConfig.password = config.pat;
-        } else if (config.authMethod === "password") {
+        if (config.pat) {
+          connectionConfig.authenticator = "PROGRAMMATIC_ACCESS_TOKEN";
+          connectionConfig.token = config.pat;
+        } else if (config.password) {
           connectionConfig.password = config.password;
         }
 
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
           await executeSQL(`CREATE IMAGE REPOSITORY IF NOT EXISTS ${DB}.${SCHEMA}.${SNOWFLAKE_OBJECTS.IMAGE_REPOSITORY}`);
           log("Image repository ready", "success");
 
-          const repoUrl = `${config.account.toLowerCase()}.registry.snowflakecomputing.com/${DB.toLowerCase()}/${SCHEMA.toLowerCase()}/${SNOWFLAKE_OBJECTS.IMAGE_REPOSITORY.toLowerCase()}`;
+          const repoUrl = `${config.account.toLowerCase().replace(/_/g, "-")}.registry.snowflakecomputing.com/${DB.toLowerCase()}/${SCHEMA.toLowerCase()}/${SNOWFLAKE_OBJECTS.IMAGE_REPOSITORY.toLowerCase()}`;
           send({ repoUrl });
 
           send({ stage: "deploying" });
@@ -159,6 +160,8 @@ export async function POST(request: NextRequest) {
 
           const imagePath = getImagePath(config.imageTag || "latest");
 
+          const snowflakeHost = `${config.account.toLowerCase().replace(/_/g, "-")}.snowflakecomputing.com`;
+          const agentName = `${DB}.${SCHEMA}.${SNOWFLAKE_OBJECTS.AGENT}`;
           const serviceSpec = {
             spec: {
               containers: [
@@ -166,9 +169,12 @@ export async function POST(request: NextRequest) {
                   name: "c360-app",
                   image: imagePath,
                   env: {
+                    SNOWFLAKE_HOST: snowflakeHost,
+                    SNOWFLAKE_ACCOUNT: config.account,
                     SNOWFLAKE_DATABASE: DB,
                     SNOWFLAKE_SCHEMA: SCHEMA,
                     SNOWFLAKE_WAREHOUSE: SNOWFLAKE_OBJECTS.WAREHOUSE,
+                    CORTEX_AGENT_NAME: agentName,
                   },
                 },
               ],

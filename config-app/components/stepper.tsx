@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckCircle, Circle, Loader2 } from "lucide-react";
+import { CheckCircle, Circle } from "lucide-react";
 
 const steps = [
   { id: 1, name: "Branding", path: "/branding" },
@@ -19,7 +19,7 @@ interface StepperProps {
 
 export function Stepper({ completedSteps = [], currentStep }: StepperProps) {
   const pathname = usePathname();
-  const activeStep = currentStep || steps.findIndex((s) => s.path === pathname) + 1;
+  const activeStep = currentStep || steps.findIndex((s) => pathname.includes(s.path.split("/").pop()!)) + 1;
 
   return (
     <nav className="flex items-center justify-center gap-2 py-4 px-6 bg-white border-b border-gray-200">

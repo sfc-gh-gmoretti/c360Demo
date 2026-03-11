@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
+
+let cachedJwtToken: string | null = null;
+let tokenExpiry: number = 0;
 
 function getOAuthToken(): string | null {
   const tokenPath = "/snowflake/session/token";
@@ -8,7 +13,6 @@ function getOAuthToken(): string | null {
       return fs.readFileSync(tokenPath, "utf8");
     }
   } catch {
-    // Not in SPCS environment
   }
   return null;
 }
@@ -17,13 +21,47 @@ function getPATToken(): string | null {
   return process.env.SNOWFLAKE_PAT || null;
 }
 
+function getPrivateKey(): string {
+  const keyPath = process.env.SNOWFLAKE_PRIVATE_KEY_PATH || `${process.env.HOME}/.snowflake/keys/rsa_key.p8`;
+  if (!fs.existsSync(keyPath)) {
+    throw new Error(`Private key not found at ${keyPath}`);
+  }
+  return fs.readFileSync(keyPath, "utf8");
+}
+
+function generateJwtToken(): string {
+  if (cachedJwtToken && Date.now() < tokenExpiry) {
+    return cachedJwtToken;
+  }
+
+  const user = (process.env.SNOWFLAKE_USER || "admin").toUpperCase();
+  const privateKey = getPrivateKey();
+  const qualifiedAccountName = process.env.SNOWFLAKE_ACCOUNT_QUALIFIED || "SFSEEUROPE-EU_DEMO86C";
+
+  const privateKeyObj = crypto.createPrivateKey(privateKey);
+  const publicKeyDer = crypto.createPublicKey(privateKeyObj).export({ type: "spki", format: "der" });
+  const fingerprint = crypto.createHash("sha256").update(publicKeyDer).digest("base64");
+  const publicKeyFingerprint = `SHA256:${fingerprint}`;
+
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: `${qualifiedAccountName}.${user}.${publicKeyFingerprint}`,
+    sub: `${qualifiedAccountName}.${user}`,
+    iat: now,
+    exp: now + 3600,
+  };
+
+  cachedJwtToken = jwt.sign(payload, privateKey, { algorithm: "RS256" });
+  tokenExpiry = (now + 3500) * 1000;
+  return cachedJwtToken;
+}
+
 function getAccountBaseUrl(): string {
   const token = getOAuthToken();
-  if (token) {
-    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
-    return `https://${host}`;
+  if (token && process.env.SNOWFLAKE_HOST) {
+    return `https://${process.env.SNOWFLAKE_HOST}`;
   }
-  const host = process.env.SNOWFLAKE_HOST || "sfseeurope-eu-demo86c.snowflakecomputing.com";
+  const host = process.env.SNOWFLAKE_HOST || "sfseeurope-eu_demo86c.snowflakecomputing.com";
   return `https://${host}`;
 }
 
@@ -33,7 +71,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   if (oauthToken) {
     return {
       "Authorization": `Bearer ${oauthToken}`,
-      "X-Snowflake-Authorization-Token-Type": "OAUTH",
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
@@ -47,6 +84,17 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
+  }
+
+  try {
+    const jwtToken = generateJwtToken();
+    return {
+      "Authorization": `Bearer ${jwtToken}`,
+      "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    };
+  } catch {
   }
   
   throw new Error("No authentication available. Please run Setup wizard or deploy to SPCS.");
@@ -141,9 +189,9 @@ export async function GET() {
       `),
       executeQuery(`SELECT COUNT(*) as TOTAL FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS`),
       executeQuery(`
-        SELECT PENSION_TYPE as NAME, COUNT(*) as VALUE 
+        SELECT PRODUCT_TYPE as NAME, COUNT(*) as VALUE 
         FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS 
-        GROUP BY PENSION_TYPE 
+        GROUP BY PRODUCT_TYPE 
         ORDER BY VALUE DESC
       `),
       executeQuery(`
@@ -153,35 +201,35 @@ export async function GET() {
         ORDER BY VALUE DESC
       `),
       executeQuery(`
-        SELECT PREFERRED_CHANNEL as NAME, COUNT(*) as VALUE 
+        SELECT PREFERRED_COMMUNICATION_CHANNEL as NAME, COUNT(*) as VALUE 
         FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_COMMUNICATION 
-        GROUP BY PREFERRED_CHANNEL 
+        GROUP BY PREFERRED_COMMUNICATION_CHANNEL 
         ORDER BY VALUE DESC
       `),
       executeQuery(`
         SELECT 
-          SUM(c.TOTAL_PENSION_VALUE) as TOTAL_PENSION,
-          AVG(c.TOTAL_PENSION_VALUE) as AVG_PENSION,
+          SUM(p.TOTAL_PENSION_VALUE) as TOTAL_PENSION,
+          AVG(p.TOTAL_PENSION_VALUE) as AVG_PENSION,
           SUM(p.FUND_VALUE) as TOTAL_POLICY
-        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS c
-        LEFT JOIN CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS p ON c.CUSTOMER_ID = p.CUSTOMER_ID
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS p
       `),
       executeQuery(`
         SELECT 
-          INCOME_BRACKET as SEGMENT, 
-          SUM(TOTAL_PENSION_VALUE) as VALUE 
-        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS
-        GROUP BY INCOME_BRACKET 
+          c.INCOME_BRACKET as SEGMENT, 
+          SUM(p.TOTAL_PENSION_VALUE) as VALUE 
+        FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS c
+        JOIN CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS p ON c.CUSTOMER_ID = p.CUSTOMER_ID
+        GROUP BY c.INCOME_BRACKET 
         ORDER BY VALUE DESC
       `),
       executeQuery(`
         SELECT 
-          MARKETING_CHANNEL as DATE,
+          TO_CHAR(DATE_TRUNC('week', LAST_INTERACTION_DATE), 'Mon DD') as DATE,
           COUNT(*) as INTERACTIONS
         FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_INTERACTION_AND_LEADS 
-        GROUP BY MARKETING_CHANNEL
-        ORDER BY INTERACTIONS DESC
-        LIMIT 8
+        WHERE LAST_INTERACTION_DATE >= DATEADD(month, -3, CURRENT_DATE())
+        GROUP BY DATE_TRUNC('week', LAST_INTERACTION_DATE)
+        ORDER BY DATE_TRUNC('week', LAST_INTERACTION_DATE)
       `),
     ]);
 

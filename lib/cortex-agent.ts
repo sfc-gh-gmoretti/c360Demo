@@ -55,10 +55,25 @@ function generateJwtToken(): string {
 
 export function getAccountBaseUrl(): string {
   const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
+  const port = process.env.SNOWFLAKE_PORT;
+  if (port) {
+    return `https://${host}:${port}`;
+  }
   return `https://${host}`;
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
+  const oauthToken = getOAuthToken();
+  
+  if (oauthToken) {
+    return {
+      "Authorization": `Snowflake Token="${oauthToken}"`,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "User-Agent": "Customer360Intelligence/1.0",
+    };
+  }
+  
   const jwtToken = generateJwtToken();
   return {
     "Authorization": `Bearer ${jwtToken}`,

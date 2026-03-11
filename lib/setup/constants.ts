@@ -11,6 +11,8 @@ export const SNOWFLAKE_OBJECTS = {
   EXTERNAL_ACCESS: "C360_EXTERNAL_ACCESS",
   SERVICE: "CUSTOMER_360_APP",
   PAT_SECRET: "C360_PAT",
+  ML_MODEL: "CROSS_SELL_PROPENSITY",
+  ML_MODEL_STAGE: "ML_MODEL_STAGE",
 } as const;
 
 export const COMPUTE_POOL_CONFIG = {
@@ -40,7 +42,9 @@ export type SnowflakeObjectType =
   | "agent"
   | "network_rule"
   | "external_access"
-  | "secret";
+  | "secret"
+  | "ml_model"
+  | "stage";
 
 export interface ObjectStatus {
   name: string;

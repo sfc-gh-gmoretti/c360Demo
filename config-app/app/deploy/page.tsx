@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Cloud,
   CheckCircle,
+  XCircle,
   Loader2,
   ArrowRight,
   ArrowLeft,
@@ -15,8 +16,12 @@ import {
   Box,
   Server,
   Cpu,
+  RefreshCw,
+  AlertTriangle,
+  Copy,
+  Check,
 } from "lucide-react";
-import { SNOWFLAKE_OBJECTS, COMPUTE_POOL_CONFIG, getRegistryUrl } from "@/lib/constants";
+import { SNOWFLAKE_OBJECTS, COMPUTE_POOL_CONFIG, getRegistryUrl, ObjectStatus } from "@/lib/constants";
 
 type Stage = "idle" | "building" | "pushing" | "deploying" | "complete";
 
@@ -39,10 +44,20 @@ export default function DeployPage() {
   const [snowflakeConfig, setSnowflakeConfig] = useState<{
     account: string;
     user: string;
-    password?: string;
     pat?: string;
-    authMethod: string;
   } | null>(null);
+
+  const [checkingInfra, setCheckingInfra] = useState(false);
+  const [infraStatus, setInfraStatus] = useState<ObjectStatus[]>([]);
+  const [infraChecked, setInfraChecked] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const [availableImages, setAvailableImages] = useState<{tag: string; createdOn: string; digest: string}[]>([]);
+  const [loadingImages, setLoadingImages] = useState(false);
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
 
   const hasLoadedRef = React.useRef(false);
   const [stateLoaded, setStateLoaded] = useState(false);
@@ -51,18 +66,25 @@ export default function DeployPage() {
     if (hasLoadedRef.current) return;
     hasLoadedRef.current = true;
 
+    const sfConfig = localStorage.getItem("snowflakeConfig");
+    let currentAccount = "";
+    if (sfConfig) {
+      const config = JSON.parse(sfConfig);
+      setSnowflakeConfig(config);
+      currentAccount = config.account || "";
+    }
+
     const stored = localStorage.getItem("deployState");
     if (stored) {
       const state = JSON.parse(stored);
-      setInfrastructureReady(state.infrastructureReady || false);
-      setImagePushed(state.imagePushed || false);
-      setServiceStarted(state.serviceStarted || false);
-      if (state.appUrl) setAppUrl(state.appUrl);
-    }
-
-    const sfConfig = localStorage.getItem("snowflakeConfig");
-    if (sfConfig) {
-      setSnowflakeConfig(JSON.parse(sfConfig));
+      if (state.account === currentAccount) {
+        setInfrastructureReady(state.infrastructureReady || false);
+        setImagePushed(state.imagePushed || false);
+        setServiceStarted(state.serviceStarted || false);
+        if (state.appUrl) setAppUrl(state.appUrl);
+      } else {
+        localStorage.removeItem("deployState");
+      }
     }
 
     setMounted(true);
@@ -70,10 +92,17 @@ export default function DeployPage() {
   }, []);
 
   useEffect(() => {
-    if (stateLoaded) {
+    if (stateLoaded && snowflakeConfig && !infraChecked) {
+      checkInfrastructure();
+    }
+  }, [stateLoaded, snowflakeConfig, infraChecked]);
+
+  useEffect(() => {
+    if (stateLoaded && snowflakeConfig) {
       localStorage.setItem(
         "deployState",
         JSON.stringify({
+          account: snowflakeConfig.account,
           infrastructureReady,
           imagePushed,
           serviceStarted,
@@ -81,9 +110,104 @@ export default function DeployPage() {
         })
       );
     }
-  }, [infrastructureReady, imagePushed, serviceStarted, appUrl, stateLoaded]);
+  }, [infrastructureReady, imagePushed, serviceStarted, appUrl, stateLoaded, snowflakeConfig]);
+
+  const resetDeployState = () => {
+    localStorage.removeItem("deployState");
+    setInfrastructureReady(false);
+    setImagePushed(false);
+    setServiceStarted(false);
+    setAppUrl("");
+    setInfraChecked(false);
+    setInfraStatus([]);
+    checkInfrastructure();
+  };
+
+  const checkInfrastructure = async () => {
+    if (!snowflakeConfig) return;
+    setCheckingInfra(true);
+
+    try {
+      const res = await fetch("/api/check-objects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snowflakeConfig),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setInfraStatus(data.objects);
+        setInfraChecked(true);
+        
+        await fetchAppUrl();
+        fetchAvailableImages();
+      }
+    } catch (err) {
+      console.error("Failed to check infrastructure:", err);
+    } finally {
+      setCheckingInfra(false);
+    }
+  };
+
+  const fetchAppUrl = async () => {
+    if (!snowflakeConfig) return;
+    try {
+      const res = await fetch("/api/get-app-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-snowflake-config": JSON.stringify(snowflakeConfig),
+        },
+      });
+      const data = await res.json();
+      if (data.url) {
+        setAppUrl(data.url);
+        setServiceStarted(true);
+      } else {
+        setAppUrl("");
+      }
+    } catch {
+      setAppUrl("");
+    }
+  };
+
+  const fetchAvailableImages = async () => {
+    if (!snowflakeConfig) return;
+    setLoadingImages(true);
+    try {
+      const res = await fetch("/api/list-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snowflakeConfig),
+      });
+      const data = await res.json();
+      if (data.images) {
+        setAvailableImages(data.images);
+      }
+    } catch (err) {
+      console.error("Failed to fetch images:", err);
+    } finally {
+      setLoadingImages(false);
+    }
+  };
 
   const isIdle = stage === "idle" || stage === "complete";
+
+  const requiredForDeploy = [
+    SNOWFLAKE_OBJECTS.DATABASE,
+    SNOWFLAKE_OBJECTS.SCHEMA,
+    SNOWFLAKE_OBJECTS.WAREHOUSE,
+    SNOWFLAKE_OBJECTS.WEBAPP_POOL,
+    SNOWFLAKE_OBJECTS.ML_POOL,
+    SNOWFLAKE_OBJECTS.IMAGE_REPOSITORY,
+    SNOWFLAKE_OBJECTS.NETWORK_RULE,
+    SNOWFLAKE_OBJECTS.EXTERNAL_ACCESS,
+  ];
+
+  const missingInfra = infraStatus.filter(
+    (obj) => requiredForDeploy.includes(obj.name as typeof requiredForDeploy[number]) && !obj.exists
+  );
+  const allInfraReady = infraChecked && missingInfra.length === 0;
 
   const prepareInfrastructure = async () => {
     if (currentAction || !snowflakeConfig) return;
@@ -109,6 +233,7 @@ export default function DeployPage() {
 
       await processStream(response);
       setInfrastructureReady(true);
+      await checkInfrastructure();
     } catch (err) {
       setLogs((prev) => [
         ...prev,
@@ -253,7 +378,7 @@ export default function DeployPage() {
       icon: Upload,
       done: imagePushed,
       action: buildAndPushImage,
-      disabled: !infrastructureReady || !isIdle,
+      disabled: !infrastructureReady || !isIdle || !allInfraReady,
     },
     {
       id: "deploy",
@@ -267,6 +392,8 @@ export default function DeployPage() {
   ];
 
   const registryUrl = snowflakeConfig ? getRegistryUrl(snowflakeConfig.account) : "";
+
+  const getInfraObjectStatus = (name: string) => infraStatus.find((o) => o.name === name);
 
   return (
     <div className="space-y-6">
@@ -285,18 +412,107 @@ export default function DeployPage() {
                 <p className="text-green-700 text-sm">Your Customer 360 app is now live.</p>
               </div>
             </div>
-            <a
-              href={appUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
-            >
-              Open Your App
-              <ExternalLink className="h-4 w-4" />
-            </a>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(appUrl);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition-colors"
+                title="Copy URL"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </button>
+              <a
+                href={appUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+              >
+                Open Your App
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
           </div>
         </div>
       )}
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Server className="h-5 w-5 text-[#29B5E8]" />
+            Infrastructure Status
+          </h3>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={resetDeployState}
+              className="text-sm text-orange-600 hover:text-orange-800"
+            >
+              Reset State
+            </button>
+            <button
+              onClick={checkInfrastructure}
+              disabled={checkingInfra}
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${checkingInfra ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {!infraChecked && checkingInfra && (
+          <div className="flex items-center gap-2 text-gray-600">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Checking infrastructure...
+          </div>
+        )}
+
+        {infraChecked && missingInfra.length > 0 && (
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-amber-800">Missing Infrastructure</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  The following required objects are missing. Go back to Step 2 (Snowflake) to create them, or run &ldquo;Prepare Infrastructure&rdquo; below.
+                </p>
+                <ul className="mt-2 text-sm text-amber-700 list-disc list-inside">
+                  {missingInfra.map((obj) => (
+                    <li key={obj.name}>{obj.name}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {infraChecked && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {requiredForDeploy.map((name) => {
+              const status = getInfraObjectStatus(name);
+              return (
+                <div
+                  key={name}
+                  className={`p-3 rounded-lg ${
+                    status?.exists ? "bg-green-50" : "bg-red-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {status?.exists ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs font-medium text-gray-700 truncate">{name}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="card">
@@ -327,7 +543,17 @@ export default function DeployPage() {
             </div>
 
             <div>
-              <label className="label">Image Tag</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="label mb-0">Image Tag</label>
+                <button
+                  onClick={fetchAvailableImages}
+                  disabled={loadingImages}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  <RefreshCw className={`h-3 w-3 ${loadingImages ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </div>
               <input
                 type="text"
                 className="input"
@@ -335,6 +561,28 @@ export default function DeployPage() {
                 onChange={(e) => setImageTag(e.target.value)}
                 disabled={!isIdle}
               />
+              {availableImages.length > 0 && (
+                <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
+                  <div className="text-gray-500 mb-1">Available in repository:</div>
+                  <div className="flex flex-wrap gap-1">
+                    {availableImages.map((img) => (
+                      <button
+                        key={img.tag}
+                        onClick={() => setImageTag(img.tag)}
+                        disabled={!isIdle}
+                        className={`px-2 py-1 rounded transition-colors ${
+                          imageTag === img.tag
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-gray-700 hover:bg-blue-100"
+                        } disabled:opacity-50`}
+                        title={`Created: ${new Date(img.createdOn).toLocaleString()}`}
+                      >
+                        {img.tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {registryUrl && (
@@ -372,12 +620,12 @@ export default function DeployPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {step.done ? (
-                        <CheckCircle className="h-6 w-6 text-green-500" />
+                        <CheckCircle className="h-5 w-5 shrink-0 text-green-500" />
                       ) : isActive ? (
-                        <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+                        <Loader2 className="h-5 w-5 shrink-0 text-blue-500 animate-spin" />
                       ) : (
                         <Icon
-                          className={`h-6 w-6 ${step.disabled ? "text-gray-400" : "text-gray-600"}`}
+                          className={`h-5 w-5 shrink-0 ${step.disabled ? "text-gray-400" : "text-gray-600"}`}
                         />
                       )}
                       <div>
@@ -395,7 +643,7 @@ export default function DeployPage() {
                         <div className="text-sm text-gray-500">{step.description}</div>
                       </div>
                     </div>
-                    {(!step.done || step.id === "push") && (
+                    {(!step.done || step.id === "push" || step.id === "deploy") && (
                       <button
                         onClick={step.action}
                         disabled={step.disabled || !!currentAction}
@@ -407,7 +655,7 @@ export default function DeployPage() {
                             : "bg-blue-600 text-white hover:bg-blue-700"
                         }`}
                       >
-                        {isActive ? "Running..." : step.done ? "Rebuild" : "Run"}
+                        {isActive ? "Running..." : step.done ? (step.id === "deploy" ? "Restart" : "Rebuild") : "Run"}
                       </button>
                     )}
                   </div>
@@ -436,6 +684,7 @@ export default function DeployPage() {
                 {log.message}
               </div>
             ))}
+            <div ref={logsEndRef} />
           </div>
         </div>
       )}

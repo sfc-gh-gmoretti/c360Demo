@@ -57,12 +57,10 @@ function generateJwtToken(): string {
 
 function getAccountBaseUrl(): string {
   const token = getOAuthToken();
-  if (token) {
-    const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
-    return `https://${host}`;
+  if (token && process.env.SNOWFLAKE_HOST) {
+    return `https://${process.env.SNOWFLAKE_HOST}`;
   }
-  const account = process.env.SNOWFLAKE_ACCOUNT || "";
-  return `https://${account}.snowflakecomputing.com`;
+  return "https://SFSEEUROPE-EU_DEMO86C.snowflakecomputing.com";
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -71,7 +69,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   if (oauthToken) {
     return {
       "Authorization": `Bearer ${oauthToken}`,
-      "X-Snowflake-Authorization-Token-Type": "OAUTH",
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
@@ -96,9 +93,9 @@ async function executeQuery(sql: string): Promise<Record<string, unknown>[]> {
     body: JSON.stringify({
       statement: sql,
       timeout: 120,
-      database: "CUSTOMER_DEMO",
+      database: "CUSTOMER_360_DEMO",
       schema: "PUBLIC",
-      warehouse: "COMPUTE_WH",
+      warehouse: "C360_WH",
     }),
   });
 
@@ -149,13 +146,13 @@ export async function POST(
     const { customerId } = await params;
 
     const [demographics, communication, pension, mindset, products, interactions, cwe] = await Promise.all([
-      executeQuery(`SELECT * FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS WHERE CUSTOMER_ID = '${customerId}'`),
-      executeQuery(`SELECT * FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_COMMUNICATION WHERE CUSTOMER_ID = '${customerId}'`),
-      executeQuery(`SELECT * FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS WHERE CUSTOMER_ID = '${customerId}' LIMIT 1`),
-      executeQuery(`SELECT * FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_MINDSET WHERE CUSTOMER_ID = '${customerId}'`),
-      executeQuery(`SELECT * FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_PRODUCTS WHERE CUSTOMER_ID = '${customerId}'`),
-      executeQuery(`SELECT * FROM CUSTOMER_DEMO.PUBLIC.CUSTOMER_INTERACTION_AND_LEADS WHERE CUSTOMER_ID = '${customerId}'`),
-      executeQuery(`SELECT * FROM CUSTOMER_DEMO.PUBLIC.CWE_DATA WHERE CUSTOMER_ID = '${customerId}'`),
+      executeQuery(`SELECT * FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_DEMOGRAPHICS WHERE CUSTOMER_ID = '${customerId}'`),
+      executeQuery(`SELECT * FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_COMMUNICATION WHERE CUSTOMER_ID = '${customerId}'`),
+      executeQuery(`SELECT * FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PENSION_DETAILS WHERE CUSTOMER_ID = '${customerId}' LIMIT 1`),
+      executeQuery(`SELECT * FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_MINDSET WHERE CUSTOMER_ID = '${customerId}'`),
+      executeQuery(`SELECT * FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_PRODUCTS WHERE CUSTOMER_ID = '${customerId}'`),
+      executeQuery(`SELECT * FROM CUSTOMER_360_DEMO.PUBLIC.CUSTOMER_INTERACTION_AND_LEADS WHERE CUSTOMER_ID = '${customerId}'`),
+      executeQuery(`SELECT * FROM CUSTOMER_360_DEMO.PUBLIC.CWE_DATA WHERE CUSTOMER_ID = '${customerId}'`),
     ]);
 
     const d = demographics[0] || {};

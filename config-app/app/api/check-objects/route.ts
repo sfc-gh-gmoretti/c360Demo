@@ -14,10 +14,9 @@ export async function POST(request: NextRequest) {
       username: config.user,
     };
 
-    if (config.authMethod === "pat") {
-      connectionConfig.password = config.pat;
-    } else if (config.authMethod === "password") {
-      connectionConfig.password = config.password;
+    if (config.pat) {
+      connectionConfig.authenticator = "PROGRAMMATIC_ACCESS_TOKEN";
+      connectionConfig.token = config.pat;
     }
 
     connection = snowflake.createConnection(connectionConfig);
@@ -131,6 +130,22 @@ export async function POST(request: NextRequest) {
         SNOWFLAKE_OBJECTS.EXTERNAL_ACCESS,
         "external_access",
         `SHOW EXTERNAL ACCESS INTEGRATIONS LIKE '${SNOWFLAKE_OBJECTS.EXTERNAL_ACCESS}'`
+      )
+    );
+
+    results.push(
+      await checkObject(
+        SNOWFLAKE_OBJECTS.ML_MODEL_STAGE,
+        "stage",
+        `SHOW STAGES LIKE '${SNOWFLAKE_OBJECTS.ML_MODEL_STAGE}' IN SCHEMA ${SNOWFLAKE_OBJECTS.DATABASE}.${SNOWFLAKE_OBJECTS.SCHEMA}`
+      )
+    );
+
+    results.push(
+      await checkObject(
+        SNOWFLAKE_OBJECTS.ML_MODEL,
+        "ml_model",
+        `SHOW MODELS LIKE '${SNOWFLAKE_OBJECTS.ML_MODEL}' IN SCHEMA ${SNOWFLAKE_OBJECTS.DATABASE}.${SNOWFLAKE_OBJECTS.SCHEMA}`
       )
     );
 

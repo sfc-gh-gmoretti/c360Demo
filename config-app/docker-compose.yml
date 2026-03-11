@@ -1,0 +1,24 @@
+services:
+  config-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ..:/webapp
+    environment:
+      - SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT:-}
+      - SNOWFLAKE_USER=${SNOWFLAKE_USER:-}
+      - SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD:-}
+      - SNOWFLAKE_DATABASE=${SNOWFLAKE_DATABASE:-CUSTOMER_360_DEMO}
+      - SNOWFLAKE_SCHEMA=${SNOWFLAKE_SCHEMA:-PUBLIC}
+      - SNOWFLAKE_WAREHOUSE=${SNOWFLAKE_WAREHOUSE:-C360_WH}
+      - SNOWFLAKE_ROLE=${SNOWFLAKE_ROLE:-}
+      - CONFIG_PATH=/app/config/settings.json
+      - WEBAPP_DIR=/webapp
+    restart: unless-stopped
