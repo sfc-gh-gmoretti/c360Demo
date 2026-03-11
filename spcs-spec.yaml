@@ -1,11 +1,12 @@
 spec:
   containers:
     - name: c360-app
-      image: sfseeurope-eu-demo86c.registry.snowflakecomputing.com/customer_360_demo/public/c360_images/customer360:latest
+      image: sfseeurope-eu-demo86c.registry.snowflakecomputing.com/customer_360_demo/public/c360_images/customer360:v4
       env:
         SNOWFLAKE_DATABASE: "CUSTOMER_360_DEMO"
         SNOWFLAKE_SCHEMA: "PUBLIC"
         SNOWFLAKE_WAREHOUSE: "C360_WH"
+        SNOWFLAKE_HOST: "jg98339.eu-west-1.aws.snowflakecomputing.com"
       readinessProbe:
         port: 3000
         path: "/"

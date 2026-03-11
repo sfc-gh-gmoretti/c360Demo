@@ -10,7 +10,7 @@ interface Customer {
   AGE_GROUP: string;
   GENDER: string;
   INCOME_BRACKET: string;
-  HOMEOWNER_STATUS: string;
+  MARITAL_STATUS: string;
 }
 
 interface CustomerSearchProps {
@@ -39,15 +39,22 @@ export function CustomerSearch({ onSelectCustomer, selectedCustomerId, onClearSe
 
   useEffect(() => {
     const searchCustomers = async () => {
+      if (!query.trim()) {
+        setResults([]);
+        return;
+      }
       setLoading(true);
       try {
         const response = await fetch(`/api/customers/search?q=${encodeURIComponent(query)}&limit=10`);
         if (response.ok) {
           const data = await response.json();
-          setResults(data.customers);
+          setResults(Array.isArray(data?.customers) ? data.customers : []);
+        } else {
+          setResults([]);
         }
       } catch (error) {
         console.error("Search error:", error);
+        setResults([]);
       } finally {
         setLoading(false);
       }

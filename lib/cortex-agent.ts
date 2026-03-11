@@ -54,12 +54,27 @@ function generateJwtToken(): string {
 }
 
 export function getAccountBaseUrl(): string {
-  const host = process.env.SNOWFLAKE_HOST || `${process.env.SNOWFLAKE_ACCOUNT}.snowflakecomputing.com`;
+  const host = process.env.SNOWFLAKE_HOST;
   const port = process.env.SNOWFLAKE_PORT;
-  if (port) {
-    return `https://${host}:${port}`;
+  
+  console.log("ENV DEBUG - SNOWFLAKE_HOST:", host);
+  console.log("ENV DEBUG - SNOWFLAKE_PORT:", port);
+  console.log("ENV DEBUG - SNOWFLAKE_ACCOUNT:", process.env.SNOWFLAKE_ACCOUNT);
+  
+  if (!host) {
+    const account = process.env.SNOWFLAKE_ACCOUNT || "";
+    const url = `https://${account}.snowflakecomputing.com`;
+    console.log("Using fallback URL from ACCOUNT:", url);
+    return url;
   }
-  return `https://${host}`;
+  if (port) {
+    const url = `https://${host}:${port}`;
+    console.log("Using HOST:PORT URL:", url);
+    return url;
+  }
+  const url = `https://${host}`;
+  console.log("Using HOST URL:", url);
+  return url;
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -67,7 +82,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   
   if (oauthToken) {
     return {
-      "Authorization": `Snowflake Token="${oauthToken}"`,
+      "Authorization": `Bearer ${oauthToken}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
       "User-Agent": "Customer360Intelligence/1.0",
@@ -124,6 +139,10 @@ export async function* runAgent(
   const [database, schema, name] = agentName.split(".");
   const url = `${baseUrl}/api/v2/databases/${database}/schemas/${schema}/agents/${name}:run`;
   
+  console.log("Agent API URL:", url);
+  console.log("Using OAuth token:", headers.Authorization?.substring(0, 30) + "...");
+  
+  console.log("Making request to:", url);
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -139,8 +158,12 @@ export async function* runAgent(
     }),
   });
 
+  console.log("Response status:", response.status, response.statusText);
+  console.log("Response headers:", JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+
   if (!response.ok) {
     const error = await response.text();
+    console.log("Error response body:", error);
     throw new Error(`Failed to run agent: ${error}`);
   }
 
@@ -163,12 +186,13 @@ export async function* runAgent(
     for (const line of lines) {
       if (line.startsWith("data: ")) {
         const data = line.slice(6);
+        console.log("SSE data:", data.substring(0, 200));
         if (data === "[DONE]") continue;
         try {
           const parsed = JSON.parse(data);
           yield parsed;
         } catch {
-          // Skip invalid JSON
+          console.log("Failed to parse JSON:", data);
         }
       }
     }

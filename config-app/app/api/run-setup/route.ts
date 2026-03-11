@@ -321,7 +321,12 @@ const SETUP_STEPS: SetupStep[] = [
           ],
           "tool_resources": {
             "customer_data": {
-              "semantic_view": "${DB}.${SCHEMA}.${SNOWFLAKE_OBJECTS.SEMANTIC_VIEW}"
+              "semantic_view": "${DB}.${SCHEMA}.${SNOWFLAKE_OBJECTS.SEMANTIC_VIEW}",
+              "execution_environment": {
+                "type": "warehouse",
+                "warehouse": "${SNOWFLAKE_OBJECTS.WAREHOUSE}",
+                "query_timeout": 60
+              }
             }
           }
         }
